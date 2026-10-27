@@ -71,7 +71,12 @@ def build_disk_section(records):
     if not records:
         lines.append("_No disk data recorded for this date._")
         return lines, counts
-    for r in records:
+    latest_per_disk = {}
+    for record in records:
+        key = (record.get("host"), record.get("filesystem"), record.get("mount"))
+        latest_per_disk[key] = record
+
+    for r in latest_per_disk.values():
         status = r.get("status", "?")
         if status == "WARNING":
             counts["warn"] += 1
@@ -145,8 +150,25 @@ def main():
     mem_lines, mem_counts = build_memory_section(mem_records)
     svc_lines, svc_counts = build_service_section(svc_records)
 
-    total_warn = disk_counts["warn"] + mem_counts["warn"] + svc_counts["warn"]
-    total_crit = disk_counts["crit"] + mem_counts["crit"] + svc_counts["crit"]
+    cpu_records = filter_by_date(
+        load_jsonl(os.path.join(args.data_dir, "cpu_results.jsonl")), args.date
+    )
+    cpu_lines = ["## CPU Usage", ""]
+    cpu_warn = cpu_crit = 0
+    if cpu_records:
+        cpu = cpu_records[-1]
+        status = cpu.get("status", "?")
+        cpu_lines.append(
+            f"- **CPU used:** {cpu.get('percent', '?')}% — {status_emoji(status)} {status}"
+        )
+        cpu_warn = int(status == "WARNING")
+        cpu_crit = int(status == "CRITICAL")
+    else:
+        cpu_lines.append("_No CPU data recorded for this date._")
+    cpu_lines.append("")
+
+    total_warn = cpu_warn + disk_counts["warn"] + mem_counts["warn"] + svc_counts["warn"]
+    total_crit = cpu_crit + disk_counts["crit"] + mem_counts["crit"] + svc_counts["crit"]
 
     if total_crit > 0:
         overall = "\U0001F534 CRITICAL"
@@ -172,6 +194,7 @@ def main():
         "|---|---|",
         f"| {total_warn} | {total_crit} |",
         "",
+        *cpu_lines,
         *disk_lines,
         "",
         *mem_lines,

@@ -27,7 +27,8 @@ for svc in ${SERVICES_TO_CHECK}; do
         state="active"
         log_line "INFO" "Service ${svc} is active"
     else
-        state="$(systemctl is-active "${svc}" 2>/dev/null || echo "unknown")"
+        state="$(systemctl is-active "${svc}" 2>/dev/null)"
+        state="${state:-unknown}"
         log_line "CRITICAL" "Service ${svc} is NOT active (state: ${state})"
         EXIT_CODE=2
     fi
